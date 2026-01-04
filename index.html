@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8" />
+    <title>PLATEAU MVT Viewer (Local)</title>
+    <meta name="viewport" content="initial-scale=1,maximum-scale=1,user-scalable=no" />
+    <script src="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.js"></script>
+    <link href="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.css" rel="stylesheet" />
+    <style>
+        body { margin: 0; padding: 0; }
+        #map { position: absolute; top: 0; bottom: 0; width: 100%; }
+        /* 情報表示用のパネル */
+        #info {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background: rgba(255, 255, 255, 0.9);
+            padding: 10px;
+            border-radius: 4px;
+            font-family: sans-serif;
+            z-index: 1;
+        }
+    </style>
+</head>
+<body>
+    <div id="info">
+        <strong>Status:</strong> <span id="status">マップ読み込み中...</span><br>
+        <small>右クリック＋ドラッグで3D回転できます</small>
+    </div>
+    <div id="map"></div>
+
+    <script>
+        // ▼▼▼ 設定エリア（ここだけ確認してください） ▼▼▼
+        
+        // 1. レイヤーID（metadata.jsonの "id": "..." の値）
+        // ※多くの場合は "bldg" か "Building" です。表示されない場合はここを書き換えてください。
+        const SOURCE_LAYER_ID = "bldg:Building"; 
+
+        // 2. 建物の高さ属性（metadata.jsonの "fields" にある高さの属性名）
+        // ※PLATEAU GIS Converterのデフォルトは "measuredHeight" です。
+        const HEIGHT_PROPERTY = 'measuredHeight';
+
+        // ▲▲▲ 設定エリアここまで ▲▲▲
+
+        const map = new maplibregl.Map({
+            container: 'map',
+            style: {
+                version: 8,
+                sources: {
+                    // 背景地図（OpenStreetMap）
+                    'osm': {
+                        type: 'raster',
+                        tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],
+                        tileSize: 256,
+                        attribution: '&copy; OpenStreetMap Contributors'
+                    },
+                    // PLATEAU MVT（ローカル）
+                    'plateau-local': {
+                        type: 'vector',
+                        tiles: [
+                            // ブラウザのURLを基準に、同じフォルダ内のタイルを読みに行きます
+                            window.location.href.replace('index.html', '') + '{z}/{x}/{y}.pbf'
+                        ],
+                        minzoom: 10, // データの最小ズーム（フォルダ番号の最小値）
+                        maxzoom: 16  // データの最大ズーム
+                    }
+                },
+                layers: [
+                    {
+                        id: 'osm-layer',
+                        type: 'raster',
+                        source: 'osm',
+                        minzoom: 0,
+                        maxzoom: 19
+                    },
+                    {
+                        id: 'bldg-3d',
+                        type: 'fill-extrusion',
+                        source: 'plateau-local',
+                        'source-layer': SOURCE_LAYER_ID, // ★重要: レイヤーID
+                        paint: {
+                            'fill-extrusion-color': [
+                                'case',
+                                ['boolean', ['feature-state', 'hover'], false],
+                                '#ff0000', // マウスオーバー時は赤
+                                '#aaa'     // 通常時はグレー
+                            ],
+                            // 高さの設定：データに高さ属性がない場合は固定値(10m)にする
+                            'fill-extrusion-height': ['coalesce', ['get', HEIGHT_PROPERTY], 10],
+                            'fill-extrusion-base': 0,
+                            'fill-extrusion-opacity': 0.8
+                        }
+                    }
+                ]
+            },
+            center: [139.7528, 35.6852], // 東京（千代田区付近）
+            zoom: 10, // ★重要: データが存在するズームレベルから開始する
+            pitch: 60,
+            bearing: 0
+        });
+
+        // コントロール（ズームボタンなど）の追加
+        map.addControl(new maplibregl.NavigationControl());
+
+        // ロード完了時の処理
+        map.on('load', () => {
+            document.getElementById('status').innerText = '準備完了（ズームレベル10〜）';
+            
+            // データの範囲に移動（レイヤーが読み込まれたら自動で合わせる）
+            // ※データが表示されない場合、このイベントが発火していない可能性があります
+        });
+
+        // デバッグ用：クリックした建物の情報をコンソールに出す
+        map.on('click', 'bldg-3d', (e) => {
+            console.log(e.features[0].properties);
+            alert('属性情報: ' + JSON.stringify(e.features[0].properties, null, 2));
+        });
+
+        // マウスオーバー効果
+        let hoveredStateId = null;
+        map.on('mousemove', 'bldg-3d', (e) => {
+            if (e.features.length > 0) {
+                if (hoveredStateId !== null) {
+                    map.setFeatureState(
+                        { source: 'plateau-local', sourceLayer: SOURCE_LAYER_ID, id: hoveredStateId },
+                        { hover: false }
+                    );
+                }
+                hoveredStateId = e.features[0].id;
+                // IDがないデータの場合は効果が出ませんが、エラーにはなりません
+                if (hoveredStateId !== undefined) {
+                    map.setFeatureState(
+                        { source: 'plateau-local', sourceLayer: SOURCE_LAYER_ID, id: hoveredStateId },
+                        { hover: true }
+                    );
+                }
+                map.getCanvas().style.cursor = 'pointer';
+            }
+        });
+        map.on('mouseleave', 'bldg-3d', () => {
+            if (hoveredStateId !== null) {
+                map.setFeatureState(
+                    { source: 'plateau-local', sourceLayer: SOURCE_LAYER_ID, id: hoveredStateId },
+                    { hover: false }
+                );
+            }
+            hoveredStateId = null;
+            map.getCanvas().style.cursor = '';
+        });
+    </script>
+</body>
+</html>
