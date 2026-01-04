@@ -30,17 +30,8 @@
     <div id="map"></div>
 
     <script>
-        // ▼▼▼ 設定エリア（ここだけ確認してください） ▼▼▼
-        
-        // 1. レイヤーID（metadata.jsonの "id": "..." の値）
-        // ※多くの場合は "bldg" か "Building" です。表示されない場合はここを書き換えてください。
-        const SOURCE_LAYER_ID = "bldg:Building"; 
-
-        // 2. 建物の高さ属性（metadata.jsonの "fields" にある高さの属性名）
-        // ※PLATEAU GIS Converterのデフォルトは "measuredHeight" です。
-        const HEIGHT_PROPERTY = 'measuredHeight';
-
-        // ▲▲▲ 設定エリアここまで ▲▲▲
+        const SOURCE_LAYER_ID = "tokyo_all_fixedgeojsonl"; 
+        const HEIGHT_PROPERTY = 'height';
 
         const map = new maplibregl.Map({
             container: 'map',
