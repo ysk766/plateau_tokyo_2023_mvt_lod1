@@ -1,3 +1,1 @@
 # plateau_tokyo_2023_mvt_lod1
-# plateau_tokyo_2023_mvt_lod1
-# plateau_tokyo_2023_mvt_lod1
